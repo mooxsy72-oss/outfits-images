@@ -1,0 +1,38 @@
+name: Собрать JSON нарядов
+
+# Запускается сам при любой заливке файлов в images/,
+# плюс кнопка ручного запуска во вкладке Actions.
+on:
+  push:
+    paths:
+      - 'images/**'
+  workflow_dispatch:
+
+# Разрешаем экшену коммитить обратно в репозиторий
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Пересобрать outfits.json и undressed.json
+        run: node scripts/build-json.js
+
+      - name: Закоммитить изменения
+        run: |
+          git config user.name  "outfits-bot"
+          git config user.email "actions@github.com"
+          git add outfits.json undressed.json TODO.md 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "Изменений нет"
+          else
+            git commit -m "Автообновление списка нарядов"
+            git push
+          fi
