@@ -27,6 +27,7 @@ const IMAGES_DIR = process.env.IMAGES_DIR || 'images';
 const BASE_URL = 'https://mooxsy72-oss.github.io/outfits-images/images/';
 const OUTFITS_JSON = process.env.OUTFITS_JSON || 'outfits.json';
 const UNDRESSED_JSON = process.env.UNDRESSED_JSON || 'undressed.json';
+const TAGS_FILE = process.env.TAGS_FILE || 'tags.txt';
 
 const DEFAULT_CATEGORY = 'fantasy';
 const DEFAULT_GENDER = 'female';
@@ -37,6 +38,23 @@ const KNOWN_CATEGORIES = [
   'osen', 'dacha', 'postapoc', 'slavic', 'folk', 'fantasy'
 ];
 const KNOWN_GENDERS = ['female', 'male'];
+
+// Русские названия категорий → ключи, которые понимает index.html.
+// Можно писать теги как угодно: "офис", "ofis", "Офис" — результат одинаковый.
+const CATEGORY_ALIASES = {
+  'повседневное': 'modern', 'повседневка': 'modern', 'повседнев': 'modern', 'обычное': 'modern',
+  'офис': 'ofis', 'офисное': 'ofis', 'работа': 'ofis',
+  'вечер': 'elegant', 'вечернее': 'elegant', 'элегантное': 'elegant', 'нарядное': 'elegant',
+  'спорт': 'sport', 'спортивное': 'sport',
+  'пижама': 'pyjamas', 'пижамное': 'pyjamas', 'сон': 'pyjamas',
+  'лето': 'summer', 'летнее': 'summer',
+  'осень': 'osen', 'осеннее': 'osen',
+  'дача': 'dacha', 'дачное': 'dacha',
+  'зима': 'postapoc', 'зимнее': 'postapoc', 'суроваязима': 'postapoc', 'постапок': 'postapoc',
+  'славянское': 'slavic', 'славянка': 'slavic', 'славян': 'slavic',
+  'историческое': 'folk', 'история': 'folk', 'фолк': 'folk', 'народное': 'folk',
+  'разное': 'fantasy', 'фэнтези': 'fantasy', 'фентези': 'fantasy', 'фантазия': 'fantasy'
+};
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif)$/i;
 
@@ -59,15 +77,59 @@ function parseName(filename) {
   const result = { id: Number(id), suffix: (suffix || '').toLowerCase() };
 
   if (rest) {
-    for (const tag of rest.split(/[_-]+/)) {
-      const t = tag.toLowerCase();
-      if (KNOWN_GENDERS.includes(t)) result.gender = t;
-      else if (t === 'f' || t === 'ж') result.gender = 'female';
-      else if (t === 'm' || t === 'м') result.gender = 'male';
-      else if (t) result.category = t;
-    }
+    applyTags(result, rest.split(/[_-]+/));
   }
   return result;
+}
+
+/** Раскладывает список слов по полям category / gender */
+function applyTags(target, words) {
+  for (const word of words) {
+    const t = String(word).trim().toLowerCase();
+    if (!t) continue;
+    if (KNOWN_GENDERS.includes(t)) target.gender = t;
+    else if (t === 'f' || t === 'ж' || t === 'жен' || t === 'женское' || t === 'девушка') target.gender = 'female';
+    else if (t === 'm' || t === 'м' || t === 'муж' || t === 'мужское' || t === 'парень') target.gender = 'male';
+    else target.category = CATEGORY_ALIASES[t] || t;
+  }
+  return target;
+}
+
+/**
+ * Способ 2: общий файл tags.txt в корне репозитория.
+ * Одна строка — один наряд, в любом из форматов:
+ *     720 ofis male
+ *     721: dacha, female
+ *     722 sport
+ * Строки, начинающиеся с #, игнорируются (можно писать заметки).
+ */
+function readTagsFile() {
+  const map = new Map();
+  if (!fs.existsSync(TAGS_FILE)) return map;
+
+  for (const raw of fs.readFileSync(TAGS_FILE, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const m = line.match(/^(\d+)\s*[:.,\s]\s*(.+)$/);
+    if (!m) continue;
+    map.set(Number(m[1]), applyTags({}, m[2].split(/[\s,;]+/)));
+  }
+  return map;
+}
+
+/**
+ * Способ 3: строка тегов в самом файле промпта.
+ * Первая строка вида "#tags: ofis male" — она не попадёт
+ * в текст промпта на сайте, main.js её отрезает при показе.
+ */
+function readPromptTags(txtPath) {
+  try {
+    const first = fs.readFileSync(txtPath, 'utf8').split(/\r?\n/)[0].trim();
+    const m = first.match(/^#\s*(?:tags?|теги)\s*:\s*(.+)$/i);
+    if (m) return applyTags({}, m[1].split(/[\s,;]+/));
+  } catch { /* файла нет или не читается */ }
+  return null;
 }
 
 // ── Читаем папку ───────────────────────────────────────────
@@ -80,6 +142,7 @@ const files = fs.readdirSync(IMAGES_DIR).filter(f => IMAGE_EXT.test(f));
 const txtFiles = new Set(
   fs.readdirSync(IMAGES_DIR).filter(f => /\.txt$/i.test(f)).map(f => f.toLowerCase())
 );
+const tagsFromFile = readTagsFile();
 
 const bases = new Map();  // id -> { file, category, gender }
 const stages = new Map(); // id -> [{ suffix, file }]
@@ -110,18 +173,27 @@ const unknownCats = new Set();
 for (const [id, info] of [...bases].sort((a, b) => a[0] - b[0])) {
   if (knownIds.has(id)) continue; // уже описан — не трогаем
 
-  const category = info.category || DEFAULT_CATEGORY;
-  const gender = info.gender || DEFAULT_GENDER;
+  const txtName = info.file.replace(IMAGE_EXT, '.txt');
+  const hasTxt = txtFiles.has(txtName.toLowerCase());
+
+  // Приоритет: имя файла → tags.txt → шапка промпта → значения по умолчанию
+  const fromTags = tagsFromFile.get(id) || {};
+  const fromPrompt = hasTxt ? (readPromptTags(path.join(IMAGES_DIR, txtName)) || {}) : {};
+
+  const category = info.category || fromTags.category || fromPrompt.category || DEFAULT_CATEGORY;
+  const gender = info.gender || fromTags.gender || fromPrompt.gender || DEFAULT_GENDER;
+
+  const gotCategory = info.category || fromTags.category || fromPrompt.category;
+  const gotGender = info.gender || fromTags.gender || fromPrompt.gender;
 
   if (!KNOWN_CATEGORIES.includes(category)) unknownCats.add(category);
-  if (!info.category || !info.gender) needsReview.push(id);
+  if (!gotCategory || !gotGender) needsReview.push(id);
 
-  const txtName = info.file.replace(IMAGE_EXT, '.txt');
   const entry = {
     id,
     title: '',
     img: BASE_URL + info.file,
-    prompt: txtFiles.has(txtName.toLowerCase()) ? BASE_URL + txtName : '',
+    prompt: hasTxt ? BASE_URL + txtName : '',
     category,
     gender
   };
