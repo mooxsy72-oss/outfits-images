@@ -9,9 +9,10 @@ on:
       - 'tags.txt'
   workflow_dispatch:
 
-# Разрешаем экшену коммитить обратно в репозиторий
+# Разрешаем экшену коммитить обратно в репозиторий и публиковать Pages
 permissions:
   contents: write
+  pages: write
 
 jobs:
   build:
@@ -39,4 +40,11 @@ jobs:
           else
             git commit -m "Автообновление списка нарядов"
             git push
+            echo "Запрашиваем публикацию сайта"
+            # Коммит от робота сам по себе не будит GitHub Pages,
+            # поэтому просим пересобрать сайт явно.
+            curl -s -X POST \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/pages/builds"
           fi
