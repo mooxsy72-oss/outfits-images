@@ -179,11 +179,34 @@ const existingOutfits = readJson(OUTFITS_JSON, []);
 const knownIds = new Set(existingOutfits.map(o => Number(o.id)));
 
 const added = [];
+const replaced = [];
 const needsReview = [];
 const unknownCats = new Set();
 
 for (const [id, info] of [...bases].sort((a, b) => a[0] - b[0])) {
-  if (knownIds.has(id)) continue; // уже описан — не трогаем
+  if (knownIds.has(id)) {
+    // Наряд уже есть. Если его картинка лежит здесь, в images/, —
+    // значит это замена: перенаправляем путь на новый файл.
+    // Категорию и пол не трогаем, они остаются как были.
+    const entry = existingOutfits.find(o => Number(o.id) === id);
+    const txtName = info.file.replace(IMAGE_EXT, '.txt');
+    const newImg = BASE_URL + info.file;
+
+    let changed = false;
+    if (entry.img !== newImg) {
+      entry.img = newImg;
+      changed = true;
+    }
+    if (txtFiles.has(txtName.toLowerCase())) {
+      const newPrompt = BASE_URL + txtName;
+      if (entry.prompt !== newPrompt) {
+        entry.prompt = newPrompt;
+        changed = true;
+      }
+    }
+    if (changed) replaced.push(id);
+    continue;
+  }
 
   const txtName = info.file.replace(IMAGE_EXT, '.txt');
   const hasTxt = txtFiles.has(txtName.toLowerCase());
@@ -248,6 +271,7 @@ fs.writeFileSync(
 // ── Отчёт ──────────────────────────────────────────────────
 console.log(`Нарядов всего:        ${existingOutfits.length}`);
 console.log(`Новых добавлено:      ${added.length}${added.length ? ' → ' + added.join(', ') : ''}`);
+console.log(`Заменено картинок:    ${replaced.length}${replaced.length ? ' → ' + replaced.join(', ') : ''}`);
 console.log(`Ступеней раздевалки:  ${undressed.length} (у ${stages.size} нарядов)`);
 
 if (needsReview.length) {
