@@ -24,7 +24,19 @@ const path = require('path');
 
 // ── Настройки ──────────────────────────────────────────────
 const IMAGES_DIR = process.env.IMAGES_DIR || 'images';
-const BASE_URL = 'https://mooxsy72-oss.github.io/outfits-images/images/';
+
+// Адрес картинок вычисляем из самого репозитория, в котором запущен скрипт.
+// Благодаря этому один и тот же файл работает в любом репо без правок.
+// GITHUB_REPOSITORY имеет вид "mooxsy72-oss/outfits-images".
+const BASE_URL = (() => {
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (repo && repo.includes('/')) {
+    const [owner, name] = repo.split('/');
+    return `https://${owner}.github.io/${name}/${IMAGES_DIR}/`;
+  }
+  // Запасной вариант, если скрипт запущен не в GitHub Actions
+  return 'https://mooxsy72-oss.github.io/outfits-images/images/';
+})();
 const OUTFITS_JSON = process.env.OUTFITS_JSON || 'outfits.json';
 const UNDRESSED_JSON = process.env.UNDRESSED_JSON || 'undressed.json';
 const TAGS_FILE = process.env.TAGS_FILE || 'tags.txt';
