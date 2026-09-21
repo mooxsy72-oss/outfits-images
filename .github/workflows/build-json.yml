@@ -15,11 +15,22 @@ permissions:
   contents: write
   pages: write
 
+# Очередь: если залить несколько раз подряд, роботы не работают
+# одновременно и не затирают друг друга, а идут по одному.
+concurrency:
+  group: build-json
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Берём самую свежую версию ветки, а не ту, что была
+      # на момент заливки — иначе робот из очереди работал бы
+      # со старыми файлами.
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-node@v4
         with:
@@ -38,14 +49,41 @@ jobs:
           git add TODO.md || true
           if git diff --staged --quiet; then
             echo "Изменений нет"
-          else
-            git commit -m "Автообновление списка нарядов"
-            git push
-            echo "Запрашиваем публикацию сайта"
-            # Коммит от робота сам по себе не будит GitHub Pages,
-            # поэтому просим пересобрать сайт явно.
-            curl -s -X POST \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${{ github.repository }}/pages/builds"
+            exit 0
           fi
+
+          git commit -m "Автообновление списка нарядов"
+
+          # Если пока робот работал, кто-то успел залить ещё файлы —
+          # подтягиваем их, пересобираем JSON заново и пробуем снова.
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              echo "Сохранено с попытки $attempt"
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "Не удалось сохранить за 5 попыток"
+              exit 1
+            fi
+            echo "Репозиторий изменился, пересобираю (попытка $attempt)"
+            sleep $((attempt * 3))
+            git reset --hard HEAD~1
+            git pull --rebase origin main
+            node scripts/build-json.js
+            git add outfits.json || true
+            git add undressed.json || true
+            git add TODO.md || true
+            if git diff --staged --quiet; then
+              echo "После обновления менять нечего"
+              exit 0
+            fi
+            git commit -m "Автообновление списка нарядов"
+          done
+
+          echo "Запрашиваем публикацию сайта"
+          # Коммит от робота сам по себе не будит GitHub Pages,
+          # поэтому просим пересобрать сайт явно.
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages/builds"
