@@ -40,6 +40,7 @@ const BASE_URL = (() => {
 const OUTFITS_JSON = process.env.OUTFITS_JSON || 'outfits.json';
 const UNDRESSED_JSON = process.env.UNDRESSED_JSON || 'undressed.json';
 const TAGS_FILE = process.env.TAGS_FILE || 'tags.txt';
+const DELETED_FILE = process.env.DELETED_FILE || 'deleted.txt';
 
 const DEFAULT_CATEGORY = 'fantasy';
 const DEFAULT_GENDER = 'female';
@@ -144,6 +145,32 @@ function readPromptTags(txtPath) {
   return null;
 }
 
+/**
+ * deleted.txt — номера, которые нужно убрать с сайта навсегда.
+ * Через пробел, запятую или с новой строки; диапазоны вида 100-120.
+ * Такие наряды вычищаются из JSON и не добавляются обратно,
+ * даже если картинка осталась лежать в папке.
+ */
+function readDeletedFile() {
+  const ids = new Set();
+  if (!fs.existsSync(DELETED_FILE)) return ids;
+  for (const raw of fs.readFileSync(DELETED_FILE, 'utf8').split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    for (const m of line.matchAll(/(\d+)\s*[-–—]\s*(\d+)|(\d+)/g)) {
+      if (m[3]) { ids.add(Number(m[3])); continue; }
+      const a = Number(m[1]), b = Number(m[2]);
+      const [lo, hi] = a <= b ? [a, b] : [b, a];
+      if (hi - lo > 2000) {
+        console.warn(`  deleted.txt: диапазон ${lo}-${hi} слишком большой, пропущен`);
+        continue;
+      }
+      for (let n = lo; n <= hi; n++) ids.add(n);
+    }
+  }
+  return ids;
+}
+
 // ── Читаем папку ───────────────────────────────────────────
 if (!fs.existsSync(IMAGES_DIR)) {
   console.error(`Папка ${IMAGES_DIR} не найдена`);
@@ -155,6 +182,7 @@ const txtFiles = new Set(
   fs.readdirSync(IMAGES_DIR).filter(f => /\.txt$/i.test(f)).map(f => f.toLowerCase())
 );
 const tagsFromFile = readTagsFile();
+const deletedIds = readDeletedFile();
 
 const bases = new Map();  // id -> { file, category, gender }
 const stages = new Map(); // id -> [{ suffix, file }]
@@ -176,6 +204,12 @@ for (const file of files) {
 
 // ── Собираем outfits.json ──────────────────────────────────
 const existingOutfits = readJson(OUTFITS_JSON, []);
+const removed = existingOutfits
+  .filter(o => deletedIds.has(Number(o.id)))
+  .map(o => Number(o.id));
+for (let i = existingOutfits.length - 1; i >= 0; i--) {
+  if (deletedIds.has(Number(existingOutfits[i].id))) existingOutfits.splice(i, 1);
+}
 const knownIds = new Set(existingOutfits.map(o => Number(o.id)));
 
 const added = [];
@@ -185,6 +219,7 @@ const needsReview = [];
 const unknownCats = new Set();
 
 for (const [id, info] of [...bases].sort((a, b) => a[0] - b[0])) {
+  if (deletedIds.has(id)) continue; // удалён через deleted.txt — не возвращаем
   if (knownIds.has(id)) {
     // Наряд уже есть. Если его картинка лежит здесь, в images/, —
     // значит это замена: перенаправляем путь на новый файл.
@@ -281,6 +316,7 @@ const tagsForMissing = [...tagsFromFile.keys()].filter(id => !knownIds.has(id) &
 // ручных правок в них не бывает.
 const undressed = [];
 for (const [id, list] of [...stages].sort((a, b) => b[0] - a[0])) {
+  if (deletedIds.has(id)) continue; // раздевашки удалённого наряда тоже убираем
   list.sort((a, b) => a.suffix.localeCompare(b.suffix));
   for (const s of list) {
     const txtName = s.file.replace(IMAGE_EXT, '.txt');
@@ -294,7 +330,7 @@ for (const [id, list] of [...stages].sort((a, b) => b[0] - a[0])) {
 
 // Ступени у несуществующих нарядов — частая опечатка в номере
 const allIds = new Set([...bases.keys(), ...existingOutfits.map(o => Number(o.id))]);
-const orphans = [...stages.keys()].filter(id => !allIds.has(id));
+const orphans = [...stages.keys()].filter(id => !allIds.has(id) && !deletedIds.has(id));
 
 // ── Записываем ─────────────────────────────────────────────
 existingOutfits.sort((a, b) => Number(a.id) - Number(b.id));
@@ -313,10 +349,11 @@ console.log(`Нарядов всего:        ${existingOutfits.length}`);
 console.log(`Новых добавлено:      ${added.length}${added.length ? ' → ' + added.join(', ') : ''}`);
 console.log(`Заменено картинок:    ${replaced.length}${replaced.length ? ' → ' + replaced.join(', ') : ''}`);
 console.log(`Обновлены теги:       ${retagged.length}${retagged.length ? ' → ' + retagged.join(', ') : ''}`);
+console.log(`Удалено (deleted.txt): ${removed.length}${removed.length ? ' → ' + removed.join(', ') : ''}`);
 if (tagsForMissing.length) {
   console.log(`\nВ tags.txt есть номера, которых нет в этом репо (проигнорированы): ${tagsForMissing.join(', ')}`);
 }
-console.log(`Ступеней раздевалки:  ${undressed.length} (у ${stages.size} нарядов)`);
+console.log(`Ступеней раздевалки:  ${undressed.length} (у ${new Set(undressed.map(u => u.id)).size} нарядов)`);
 
 // TODO.md — живой список: новые без категории добавляются,
 // а те, кому вы дописали теги, убираются сами.
