@@ -52,6 +52,29 @@ const KNOWN_CATEGORIES = [
 ];
 const KNOWN_GENDERS = ['female', 'male'];
 
+// Подтеги категории «Разное». Слово узнаётся по началу, поэтому
+// подойдут любые формы: «ведьма», «ведьмы», «ведьмочка».
+const SUBTAGS = [
+  ['haute',     ['мод', 'кутюр', 'haute', 'couture']],   // Высокая мода
+  ['baroque',   ['барок', 'баррок', 'baroque', 'рококо']],// Барокко
+  ['witch',     ['ведьм', 'witch']],                     // Ведьмы
+  ['knight',    ['рыцар', 'knight']],                    // Рыцарство
+  ['angel',     ['ангел', 'angel']],                     // Ангелы
+  ['barbarian', ['варвар', 'barbar']],                   // Варвары
+  ['england',   ['англ', 'england', 'english']],         // Англия
+  ['apoc',      ['постапок', 'апокалип', 'apoc', 'wasteland']] // Постапок
+];
+// Первое слово из двухсловных названий — «высокая мода», «суровая зима» —
+// само по себе ничего не значит, смысл несёт второе.
+const FILLER_WORDS = ['высокая', 'суровая'];
+
+function subtagFor(word) {
+  for (const [key, stems] of SUBTAGS) {
+    if (stems.some(st => word.startsWith(st))) return key;
+  }
+  return null;
+}
+
 // Русские названия категорий → ключи, которые понимает index.html.
 // Можно писать теги как угодно: "офис", "ofis", "Офис" — результат одинаковый.
 const CATEGORY_ALIASES = {
@@ -63,7 +86,7 @@ const CATEGORY_ALIASES = {
   'лето': 'summer', 'летнее': 'summer',
   'осень': 'osen', 'осеннее': 'osen',
   'дача': 'dacha', 'дачное': 'dacha',
-  'зима': 'postapoc', 'зимнее': 'postapoc', 'суроваязима': 'postapoc', 'постапок': 'postapoc',
+  'зима': 'postapoc', 'зимнее': 'postapoc', 'суроваязима': 'postapoc',
   'славянское': 'slavic', 'славянка': 'slavic', 'славян': 'slavic',
   'историческое': 'folk', 'история': 'folk', 'фолк': 'folk', 'народное': 'folk',
   'разное': 'fantasy', 'фэнтези': 'fantasy', 'фентези': 'fantasy', 'фантазия': 'fantasy'
@@ -103,31 +126,94 @@ function applyTags(target, words) {
     if (KNOWN_GENDERS.includes(t)) target.gender = t;
     else if (t === 'f' || t === 'ж' || t === 'жен' || t === 'женское' || t === 'девушка') target.gender = 'female';
     else if (t === 'm' || t === 'м' || t === 'муж' || t === 'мужское' || t === 'парень') target.gender = 'male';
-    else target.category = CATEGORY_ALIASES[t] || t;
+    else if (FILLER_WORDS.includes(t)) continue;
+    else if (CATEGORY_ALIASES[t]) target.category = CATEGORY_ALIASES[t];
+    else if (subtagFor(t)) {
+      target.subs = target.subs || [];
+      const key = subtagFor(t);
+      if (!target.subs.includes(key)) target.subs.push(key);
+    }
+    else target.category = t;
   }
+  // подтеги бывают только у «Разного» — если категория не указана, ставим её
+  if (target.subs && target.subs.length && !target.category) target.category = 'fantasy';
   return target;
 }
 
 /**
  * Способ 2: общий файл tags.txt в корне репозитория.
- * Одна строка — один наряд, в любом из форматов:
- *     720 ofis male
- *     721: dacha, female
- *     722 sport
- * Строки, начинающиеся с #, игнорируются (можно писать заметки).
+ * Правило одно: все номера в строке получают все слова из этой строки.
+ * Поэтому писать можно как удобнее:
+ *
+ *     720 офис м                       — один наряд
+ *     ведьмы: 23, 25, 40-45            — тег один раз, номера списком
+ *     ведьмы 23 25 40-45               — то же без двоеточия
+ *     Разное: 23 ведьмы, 25 постапок   — общее слово до двоеточия,
+ *                                        а после — у каждого своё
+ *
+ * Номер можно упоминать в нескольких строках — теги сложатся.
+ * Строки, начинающиеся с #, — заметки, их робот пропускает.
  */
+function parseTagItem(text) {
+  const ids = [];
+  const words = [];
+  for (const tok of text.split(/[\s,;:]+/)) {
+    if (!tok) continue;
+    const range = tok.match(/^(\d+)-(\d+)$/);
+    if (range) {
+      const a = Number(range[1]), b = Number(range[2]);
+      const [lo, hi] = a <= b ? [a, b] : [b, a];
+      if (hi - lo > 2000) {
+        console.warn(`  tags.txt: диапазон ${lo}-${hi} слишком большой, пропущен`);
+        continue;
+      }
+      for (let n = lo; n <= hi; n++) ids.push(n);
+    } else if (/^\d+$/.test(tok)) {
+      ids.push(Number(tok));
+    } else {
+      words.push(tok);
+    }
+  }
+  return { ids, words };
+}
+
 function readTagsFile() {
   const map = new Map();
   if (!fs.existsSync(TAGS_FILE)) return map;
 
+  // Слова для номера копятся по всем строкам, где он встречается
+  const wordsById = new Map();
+  const give = (ids, words) => {
+    for (const id of ids) {
+      if (!wordsById.has(id)) wordsById.set(id, []);
+      wordsById.get(id).push(...words);
+    }
+  };
+
   for (const raw of fs.readFileSync(TAGS_FILE, 'utf8').split(/\r?\n/)) {
-    const line = raw.trim();
+    // «100 - 120» → «100-120», чтобы диапазон читался как один кусок
+    const line = raw.trim().replace(/(\d+)\s*[-–—]\s*(\d+)/g, '$1-$2');
     if (!line || line.startsWith('#')) continue;
 
-    const m = line.match(/^(\d+)\s*[:.,\s]\s*(.+)$/);
-    if (!m) continue;
-    map.set(Number(m[1]), applyTags({}, m[2].split(/[\s,;]+/)));
+    const colon = line.indexOf(':');
+    const left = colon === -1 ? '' : line.slice(0, colon);
+    const leftPart = parseTagItem(left);
+
+    if (colon !== -1 && leftPart.ids.length === 0) {
+      // «ведьмы: 23, 25» или «Разное: 23 ведьмы, 25 постапок»:
+      // слова слева — общие, справа через запятую — отдельные наряды
+      for (const chunk of line.slice(colon + 1).split(/[,;]/)) {
+        const item = parseTagItem(chunk);
+        give(item.ids, [...leftPart.words, ...item.words]);
+      }
+    } else {
+      // «720 офис м», «721: дача», «ведьмы 23 25» — вся строка про одно
+      const item = parseTagItem(line);
+      give(item.ids, item.words);
+    }
   }
+
+  for (const [id, words] of wordsById) map.set(id, applyTags({}, words));
   return map;
 }
 
@@ -286,9 +372,16 @@ function explicitTagsFor(id) {
       fromPrompt = readPromptTags(path.join(IMAGES_DIR, txtName)) || {};
     }
   }
+  // Подтеги: строка в tags.txt главнее всего. Если номер там записан,
+  // подтеги берутся ровно из неё — убрали слово из строки, подтег снимется.
+  let subs;
+  if (tagsFromFile.has(id)) subs = fromTags.subs || [];
+  else if (info.subs || fromPrompt.subs) subs = info.subs || fromPrompt.subs;
+
   return {
     category: info.category || fromTags.category || fromPrompt.category,
-    gender: info.gender || fromTags.gender || fromPrompt.gender
+    gender: info.gender || fromTags.gender || fromPrompt.gender,
+    subs
   };
 }
 
@@ -303,6 +396,15 @@ for (const entry of existingOutfits) {
   if (t.gender && entry.gender !== t.gender) {
     entry.gender = t.gender;
     changed = true;
+  }
+  if (t.subs) {
+    const before = JSON.stringify(entry.subs || []);
+    const after = JSON.stringify(t.subs);
+    if (before !== after) {
+      if (t.subs.length) entry.subs = t.subs;
+      else delete entry.subs;
+      changed = true;
+    }
   }
   if (t.category && !KNOWN_CATEGORIES.includes(t.category)) unknownCats.add(t.category);
   if (changed && !added.includes(id)) retagged.push(id);
