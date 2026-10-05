@@ -127,6 +127,7 @@ function applyTags(target, words) {
     else if (t === 'f' || t === 'ж' || t === 'жен' || t === 'женское' || t === 'девушка') target.gender = 'female';
     else if (t === 'm' || t === 'м' || t === 'муж' || t === 'мужское' || t === 'парень') target.gender = 'male';
     else if (FILLER_WORDS.includes(t)) continue;
+    else if (t.startsWith('балет') || t.startsWith('ballet')) target.ballet = true;
     else if (CATEGORY_ALIASES[t]) target.category = CATEGORY_ALIASES[t];
     else if (subtagFor(t)) {
       target.subs = target.subs || [];
@@ -378,10 +379,16 @@ function explicitTagsFor(id) {
   if (tagsFromFile.has(id)) subs = fromTags.subs || [];
   else if (info.subs || fromPrompt.subs) subs = info.subs || fromPrompt.subs;
 
+  // Балет — так же: строка в tags.txt решает, есть отметка или нет
+  let ballet;
+  if (tagsFromFile.has(id)) ballet = !!fromTags.ballet;
+  else if (info.ballet || fromPrompt.ballet) ballet = true;
+
   return {
     category: info.category || fromTags.category || fromPrompt.category,
     gender: info.gender || fromTags.gender || fromPrompt.gender,
-    subs
+    subs,
+    ballet
   };
 }
 
@@ -395,6 +402,11 @@ for (const entry of existingOutfits) {
   }
   if (t.gender && entry.gender !== t.gender) {
     entry.gender = t.gender;
+    changed = true;
+  }
+  if (t.ballet !== undefined && !!entry.ballet !== t.ballet) {
+    if (t.ballet) entry.ballet = true;
+    else delete entry.ballet;
     changed = true;
   }
   if (t.subs) {
