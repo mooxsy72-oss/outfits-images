@@ -647,7 +647,7 @@
   {"id":701,"title":"701","img":"https://mooxsy72-oss.github.io/outfits-images/images/701.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/701.txt","category":"modern","gender":"female"},
   {"id":702,"title":"702","img":"https://mooxsy72-oss.github.io/outfits-images/images/702.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/702.txt","category":"osen","gender":"female"},
   {"id":703,"title":"703","img":"https://mooxsy72-oss.github.io/outfits-images/images/703.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/703.txt","category":"modern","gender":"female"},
-  {"id":704,"title":"704","img":"https://mooxsy72-oss.github.io/outfits-images/images/704.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/704.txt","category":"osen","gender":"female"},
+  {"id":704,"title":"704","img":"https://mooxsy72-oss.github.io/outfits-images/images/704.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/704.txt","category":"postapoc","gender":"female"},
   {"id":705,"title":"705","img":"https://mooxsy72-oss.github.io/outfits-images/images/705.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/705.txt","category":"osen","gender":"female"},
   {"id":706,"title":"706","img":"https://mooxsy72-oss.github.io/outfits-images/images/706.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/706.txt","category":"modern","gender":"female"},
   {"id":707,"title":"707","img":"https://mooxsy72-oss.github.io/outfits-images/images/707.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/707.txt","category":"osen","gender":"male"},
@@ -660,10 +660,10 @@
   {"id":714,"title":"714","img":"https://mooxsy72-oss.github.io/outfits-images/images/714.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/714.txt","category":"osen","gender":"male"},
   {"id":715,"title":"715","img":"https://mooxsy72-oss.github.io/outfits-images/images/715.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/715.txt","category":"ofis","gender":"male"},
   {"id":716,"title":"716","img":"https://mooxsy72-oss.github.io/outfits-images/images/716.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/716.txt","category":"ofis","gender":"male"},
-  {"id":717,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/717.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/717.txt","category":"osen","gender":"female"},
-  {"id":718,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/718.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/718.txt","category":"osen","gender":"female"},
-  {"id":719,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/719.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/719.txt","category":"osen","gender":"female"},
-  {"id":720,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/720.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/720.txt","category":"osen","gender":"female"},
-  {"id":721,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/721.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/721.txt","category":"osen","gender":"female"},
-  {"id":722,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/722.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/722.txt","category":"osen","gender":"female"}
+  {"id":717,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/717.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/717.txt","category":"postapoc","gender":"female"},
+  {"id":718,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/718.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/718.txt","category":"postapoc","gender":"female"},
+  {"id":719,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/719.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/719.txt","category":"postapoc","gender":"female"},
+  {"id":720,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/720.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/720.txt","category":"postapoc","gender":"female"},
+  {"id":721,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/721.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/721.txt","category":"postapoc","gender":"female"},
+  {"id":722,"title":"","img":"https://mooxsy72-oss.github.io/outfits-images/images/722.png","prompt":"https://mooxsy72-oss.github.io/outfits-images/images/722.txt","category":"postapoc","gender":"female"}
 ]
